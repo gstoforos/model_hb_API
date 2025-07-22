@@ -24,13 +24,12 @@ def fit_hb_model(shear_rates, shear_stresses, flow_rate, diameter, density):
     mu_app = tau_mean / gamma_mean if gamma_mean != 0 else 0.0
 
     # Reynolds number (approximate)
-    if flow_rate == 1 and diameter == 1 and density == 1:
-        re = 0.0
-    else:
-        area = np.pi * (diameter ** 2) / 4
+     if flow_rate > 0 and diameter > 0 and density > 0:
+      area = np.pi * (diameter ** 2) / 4
         velocity = flow_rate / area
         re = (density * velocity * diameter) / mu_app if mu_app > 0 else 0.0
-
+    else:
+    
     return {
         "tau0": round(tau0, 6),
         "k": round(k, 6),
