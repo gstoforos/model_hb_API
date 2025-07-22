@@ -29,6 +29,8 @@ def fit_hb_model(shear_rates, shear_stresses, flow_rate, diameter, density):
         velocity = flow_rate / area
         re = (density * velocity * diameter) / mu_app if mu_app > 0 else 0.0
     else:
+re = None
+
     
     return {
         "tau0": round(tau0, 6),
