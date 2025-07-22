@@ -10,7 +10,7 @@ def fit_hb_model(shear_rates, shear_stresses, flow_rate, diameter, density):
     shear_stresses = np.array(shear_stresses)
 
     try:
-        # Fit HB model
+        # Fit Herschel–Bulkley model
         popt, _ = curve_fit(hb_model, shear_rates, shear_stresses, bounds=([0, 0, 0], [np.inf, np.inf, 10]))
         tau0, k, n = popt
         predicted = hb_model(shear_rates, tau0, k, n)
@@ -23,21 +23,21 @@ def fit_hb_model(shear_rates, shear_stresses, flow_rate, diameter, density):
     tau_mean = hb_model(gamma_mean, tau0, k, n)
     mu_app = tau_mean / gamma_mean if gamma_mean != 0 else 0.0
 
-    # Reynolds number (approximate)
-     if flow_rate > 0 and diameter > 0 and density > 0:
-      area = np.pi * (diameter ** 2) / 4
-        velocity = flow_rate / area
-        re = (density * velocity * diameter) / mu_app if mu_app > 0 else 0.0
+    # Reynolds number (conditional)
+    if flow_rate > 0 and diameter > 0 and density > 0:
+        Q = flow_rate
+        D = diameter
+        rho = density
+        Re = (4 * rho * Q) / (np.pi * D * mu_app) if mu_app > 0 else 0.0
     else:
-re = None
+        Re = None
 
-    
     return {
         "tau0": round(tau0, 6),
         "k": round(k, 6),
         "n": round(n, 6),
         "r2": round(r2, 6),
         "mu_app": round(mu_app, 6),
-        "re": round(re, 2),
-        "equation": f"τ = {round(tau0,2)} + {round(k,2)}·γ̇^{round(n,2)}"
+        "re": round(Re, 2) if Re is not None else None,
+        "equation": f"τ = {round(tau0, 2)} + {round(k, 2)}·γ̇^{round(n, 2)}"
     }
