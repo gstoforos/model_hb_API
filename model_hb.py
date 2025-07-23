@@ -3,51 +3,48 @@ from scipy.optimize import curve_fit
 from sklearn.metrics import r2_score
 import math
 
-def hb_model(gamma, tau0, k, n):
-    return tau0 + k * np.power(gamma, n)
+def hb_model(gamma_dot, tau0, k, n):
+    return tau0 + k * gamma_dot ** n
 
-def fit_hb_model(data):
-    shear_rates = np.array(data.get("shear_rates", []))
-    shear_stresses = np.array(data.get("shear_stresses", []))
-
-    flow_rate = float(data.get("flow_rate", 1))
-    diameter = float(data.get("diameter", 1))
-    density = float(data.get("density", 1))
+def fit_hb(shear_rates, shear_stresses, flow_rate=1, diameter=1, density=1, re_critical=4000):
+    x = np.array(shear_rates)
+    y = np.array(shear_stresses)
 
     try:
-        popt, _ = curve_fit(hb_model, shear_rates, shear_stresses, bounds=([0, 0, 0], [np.inf, np.inf, 10]))
+        popt, _ = curve_fit(hb_model, x, y, bounds=(0, np.inf), maxfev=10000)
         tau0, k, n = popt
-        predicted = hb_model(shear_rates, tau0, k, n)
-        r2 = r2_score(shear_stresses, predicted)
     except Exception:
-        tau0 = k = n = r2 = 0.0
+        tau0, k, n = 0, 0, 1
 
-    gamma_mean = np.mean(shear_rates)
-    try:
-        tau_mean = hb_model(gamma_mean, tau0, k, n)
-    except:
-        tau_mean = 0.0
+    y_pred = hb_model(x, tau0, k, n)
+    r2 = r2_score(y, y_pred)
 
-    mu_app = tau_mean / gamma_mean if gamma_mean != 0 else 0.0
+    # Apparent viscosity μ_app = τ / γ̇ using median γ̇
+    gamma_median = np.median(x)
+    tau_median = hb_model(np.array([gamma_median]), tau0, k, n)[0]
+    mu_app = tau_median / gamma_median if gamma_median != 0 else 0
 
-    if flow_rate > 0 and diameter > 0 and density > 0 and mu_app > 0:
-        Q = flow_rate
-        D = diameter
-        rho = density
-        Re = (4 * rho * Q) / (np.pi * D * mu_app)
+    # Reynolds number: Re = (ρ * v * d) / μ_app
+    area = math.pi * diameter ** 2 / 4
+    velocity = flow_rate / area if area != 0 else 0
+    re = (density * velocity * diameter) / mu_app if mu_app != 0 else 0
+
+    # Critical flow rate: q_critical = (π·d²/4)·(Re_critical·μ_app / (ρ·d))
+    if density != 0 and diameter != 0:
+        q_critical = (math.pi * diameter ** 2 / 4) * (re_critical * mu_app / (density * diameter))
     else:
-        Re = 0.0
+        q_critical = 0
 
-    for val in [tau0, k, n, r2, mu_app, Re]:
-        if math.isnan(val) or math.isinf(val):
-            val = 0.0
+    equation = f"τ = {tau0:.3f} + {k:.3f}·γ̇^{n:.3f}"
 
     return {
-        "tau0": round(tau0, 6),
-        "k": round(k, 6),
-        "n": round(n, 6),
-        "r2": round(r2, 6),
-        "mu_app": round(mu_app, 6),
-        "re": round(Re, 2),
-        "equation": f"τ = {round(tau0, 2)} + {round(k, 2)}·γ̇^{round(n, 2)}"
+        "equation": equation,
+        "tau0": round(float(tau0), 6),
+        "k": round(float(k), 6),
+        "n": round(float(n), 6),
+        "r2": round(float(r2), 6),
+        "mu_app": round(float(mu_app), 6),
+        "re": round(float(re), 6),
+        "re_critical": re_critical,
+        "q_critical": round(float(q_critical), 6)
     }
