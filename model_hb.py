@@ -1,50 +1,51 @@
+from flask import request, jsonify
 import numpy as np
 from scipy.optimize import curve_fit
-from sklearn.metrics import r2_score
-import math
 
-def hb_model(gamma_dot, tau0, k, n):
-    return tau0 + k * gamma_dot ** n
+def hb_model(gamma, tau0, k, n):
+    return tau0 + k * gamma ** n
 
-def fit_hb(shear_rates, shear_stresses, flow_rate=1, diameter=1, density=1, re_critical=4000):
-    x = np.array(shear_rates)
-    y = np.array(shear_stresses)
+def fit_herschel_bulkley():
+    data = request.get_json()
+
+    shear_rates = np.array(data["shear_rates"])
+    shear_stresses = np.array(data["shear_stresses"])
+    flow_rate = float(data.get("flow_rate", 1))
+    diameter = float(data.get("diameter", 1))
+    density = float(data.get("density", 1))
+    Re_critical = float(data.get("re_critical", 4000))
 
     try:
-        popt, _ = curve_fit(hb_model, x, y, bounds=(0, np.inf), maxfev=10000)
+        popt, _ = curve_fit(hb_model, shear_rates, shear_stresses, bounds=(0, np.inf))
         tau0, k, n = popt
-    except Exception:
-        tau0, k, n = 0, 0, 1
+        predictions = hb_model(shear_rates, *popt)
 
-    y_pred = hb_model(x, tau0, k, n)
-    r2 = r2_score(y, y_pred)
+        ss_res = np.sum((shear_stresses - predictions) ** 2)
+        ss_tot = np.sum((shear_stresses - np.mean(shear_stresses)) ** 2)
+        r2 = 1 - ss_res / ss_tot if ss_tot != 0 else 0
 
-    # Apparent viscosity μ_app = τ / γ̇ using median γ̇
-    gamma_median = np.median(x)
-    tau_median = hb_model(np.array([gamma_median]), tau0, k, n)[0]
-    mu_app = tau_median / gamma_median if gamma_median != 0 else 0
+        gamma_mean = np.mean(shear_rates)
+        mu_app = tau0 / gamma_mean + k * gamma_mean ** (n - 1) if gamma_mean > 0 else k
 
-    # Reynolds number: Re = (ρ * v * d) / μ_app
-    area = math.pi * diameter ** 2 / 4
-    velocity = flow_rate / area if area != 0 else 0
-    re = (density * velocity * diameter) / mu_app if mu_app != 0 else 0
+        re = (density * flow_rate * diameter) / mu_app if mu_app != 0 else 0
 
-    # Critical flow rate: q_critical = (π·d²/4)·(Re_critical·μ_app / (ρ·d))
-    if density != 0 and diameter != 0:
-        q_critical = (math.pi * diameter ** 2 / 4) * (re_critical * mu_app / (density * diameter))
-    else:
-        q_critical = 0
+        if re > Re_critical:
+            q_critical = (np.pi * (diameter ** 2) / 4) * (Re_critical * mu_app / (density * diameter))
+        else:
+            q_critical = None
 
-    equation = f"τ = {tau0:.3f} + {k:.3f}·γ̇^{n:.3f}"
+        return jsonify({
+            "model": "Herschel–Bulkley",
+            "tau0": tau0,
+            "k": k,
+            "n": n,
+            "r2": r2,
+            "mu_app": mu_app,
+            "re": re,
+            "re_critical": Re_critical,
+            "q_critical": q_critical,
+            "equation": f"τ = {tau0:.3f} + {k:.3f}·γ̇^{n:.3f}"
+        })
 
-    return {
-        "equation": equation,
-        "tau0": round(float(tau0), 6),
-        "k": round(float(k), 6),
-        "n": round(float(n), 6),
-        "r2": round(float(r2), 6),
-        "mu_app": round(float(mu_app), 6),
-        "re": round(float(re), 6),
-        "re_critical": re_critical,
-        "q_critical": round(float(q_critical), 6)
-    }
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
