@@ -6,7 +6,7 @@ import math
 def hb_model(gamma, tau0, k, n):
     return tau0 + k * np.power(gamma, n)
 
-def fit_hb_model(shear_rates, shear_stresses, flow_rate, diameter, density):
+def fit_hb_model(data):
     shear_rates = np.array(data.get("shear_rates", []))
     shear_stresses = np.array(data.get("shear_stresses", []))
 
@@ -15,7 +15,6 @@ def fit_hb_model(shear_rates, shear_stresses, flow_rate, diameter, density):
     density = float(data.get("density", 1))
 
     try:
-        # Fit Herschel–Bulkley model
         popt, _ = curve_fit(hb_model, shear_rates, shear_stresses, bounds=([0, 0, 0], [np.inf, np.inf, 10]))
         tau0, k, n = popt
         predicted = hb_model(shear_rates, tau0, k, n)
@@ -23,7 +22,6 @@ def fit_hb_model(shear_rates, shear_stresses, flow_rate, diameter, density):
     except Exception:
         tau0 = k = n = r2 = 0.0
 
-    # Apparent viscosity at mean shear rate
     gamma_mean = np.mean(shear_rates)
     try:
         tau_mean = hb_model(gamma_mean, tau0, k, n)
@@ -32,7 +30,6 @@ def fit_hb_model(shear_rates, shear_stresses, flow_rate, diameter, density):
 
     mu_app = tau_mean / gamma_mean if gamma_mean != 0 else 0.0
 
-    # Reynolds number calculation (optional)
     if flow_rate > 0 and diameter > 0 and density > 0 and mu_app > 0:
         Q = flow_rate
         D = diameter
@@ -41,7 +38,6 @@ def fit_hb_model(shear_rates, shear_stresses, flow_rate, diameter, density):
     else:
         Re = 0.0
 
-    # Replace NaN or inf with 0.0 to avoid JSON parse errors
     for val in [tau0, k, n, r2, mu_app, Re]:
         if math.isnan(val) or math.isinf(val):
             val = 0.0
