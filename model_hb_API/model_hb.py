@@ -27,10 +27,13 @@ def fit_herschel_bulkley():
         gamma_mean = np.mean(shear_rates)
         mu_app = tau0 / gamma_mean + k * gamma_mean ** (n - 1) if gamma_mean > 0 else k
 
-        re = (density * flow_rate * diameter) / mu_app if mu_app != 0 else 0
+        # Correct HB Reynolds number
+        v = (4 * flow_rate) / (np.pi * diameter**2)
+        re = (density * v**(2 - n) * diameter**n) / (k * 8**(n - 1)) if k > 0 else 0
 
-        if re > Re_critical:
-            q_critical = (np.pi * (diameter ** 2) / 4) * (Re_critical * mu_app / (density * diameter))
+        # Correct HB q_critical
+        if (2 - n) != 0 and k > 0:
+            q_critical = (np.pi * diameter**2 / 4) * ((Re_critical * k * 8**(n - 1)) / (density * diameter**n))**(1 / (2 - n))
         else:
             q_critical = None
 
